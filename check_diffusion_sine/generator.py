@@ -11,8 +11,7 @@ from check_diffusion_sine.network.predictor import Predictor, create_predictor
 
 
 class GeneratorOutput(TypedDict):
-    f0: Tensor
-    voiced: Tensor
+    wave: Tensor
 
 
 def to_tensor(array: Union[Tensor, numpy.ndarray, Any]):
@@ -44,22 +43,25 @@ class Generator(nn.Module):
 
     def forward(
         self,
-        discrete_f0_list: List[Union[numpy.ndarray, Tensor]],
-        phoneme_list: List[Union[numpy.ndarray, Tensor]],
-        speaker_id: Union[numpy.ndarray, Tensor],
+        noise_weve_list: List[Union[numpy.ndarray, Tensor]],
+        lf0_list: List[Union[numpy.ndarray, Tensor]],
+        step_num: int,
     ):
-        discrete_f0_list = [to_tensor(f0).to(self.device) for f0 in discrete_f0_list]
-        phoneme_list = [to_tensor(phoneme).to(self.device) for phoneme in phoneme_list]
-        speaker_id = to_tensor(speaker_id).to(self.device)
+        noise_weve_list = [
+            to_tensor(noise_weve).to(self.device) for noise_weve in noise_weve_list
+        ]
+        lf0_list = [to_tensor(lf0).to(self.device) for lf0 in lf0_list]
 
         with torch.inference_mode():
-            output_list = self.predictor.inference(
-                discrete_f0_list=discrete_f0_list,
-                phoneme_list=phoneme_list,
-                speaker_id=speaker_id,
-            )
+            t = torch.linspace(0, 1, steps=step_num, device=self.device)
+            wave_list = [t.clone() for t in noise_weve_list]
+            for i in range(step_num):
+                output_list = self.predictor.inference(
+                    wave_list=wave_list,
+                    lf0_list=lf0_list,
+                    t=t[i].expand(len(lf0_list)),
+                )
+                for wave, output in zip(wave_list, output_list):
+                    wave += output / step_num
 
-        return [
-            GeneratorOutput(f0=output[:, 0], voiced=output[:, 1])
-            for output in output_list
-        ]
+        return [GeneratorOutput(wave=output) for output in output_list]

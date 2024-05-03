@@ -7,32 +7,19 @@ from check_diffusion_sine.utility.git_utility import get_branch_name, get_commit
 
 
 @dataclass
-class DatasetFileConfig:
-    f0_glob: str
-    phoneme_list_glob: str
-    silence_glob: str
-    volume_glob: str
-    speaker_dict_path: Path
-
-
-@dataclass
 class DatasetConfig:
-    train_file: DatasetFileConfig
-    valid_file: DatasetFileConfig
-    frame_rate: float
-    prepost_silence_length: int
-    f0_process_mode: str
-    max_sampling_length: Optional[int]
+    train_num: int
+    lf0_low: float
+    lf0_high: float
+    sampling_rate: float
+    min_sampling_length: int
+    max_sampling_length: int
     test_num: int
     seed: int = 0
 
 
 @dataclass
 class NetworkConfig:
-    speaker_size: int
-    speaker_embedding_size: int
-    phoneme_size: int
-    phoneme_embedding_size: int
     hidden_size: int
     block_num: int
     post_layer_num: int
@@ -45,8 +32,9 @@ class ModelConfig:
 
 @dataclass
 class TrainConfig:
+    diffusion_step_num: int
     batch_size: int
-    eval_batch_size: Optional[int]
+    eval_batch_size: int
     log_epoch: int
     eval_epoch: int
     snapshot_epoch: int

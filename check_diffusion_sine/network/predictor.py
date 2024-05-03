@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 import torch
 from espnet_pytorch_library.conformer.encoder import Encoder
@@ -13,27 +13,13 @@ from check_diffusion_sine.config import NetworkConfig
 class Predictor(nn.Module):
     def __init__(
         self,
-        speaker_size: int,
-        speaker_embedding_size: int,
-        phoneme_size: int,
-        phoneme_embedding_size: int,
         hidden_size: int,
         block_num: int,
         post_layer_num: int,
     ):
         super().__init__()
 
-        self.speaker_embedder = nn.Embedding(
-            num_embeddings=speaker_size,
-            embedding_dim=speaker_embedding_size,
-        )
-
-        self.phoneme_embedder = nn.Embedding(
-            num_embeddings=phoneme_size,
-            embedding_dim=phoneme_embedding_size,
-        )
-
-        input_size = 1 + phoneme_embedding_size + speaker_embedding_size
+        input_size = 1 + 1 + 1  # wave + lf0 + t
         self.pre = torch.nn.Linear(input_size, hidden_size)
 
         self.encoder = Encoder(
@@ -57,12 +43,12 @@ class Predictor(nn.Module):
             cnn_module_kernel=31,
         )
 
-        self.post = torch.nn.Linear(hidden_size, 2)
+        self.post = torch.nn.Linear(hidden_size, 1)
 
         if post_layer_num > 0:
             self.postnet = Postnet(
-                idim=2,
-                odim=2,
+                idim=1,
+                odim=1,
                 n_layers=post_layer_num,
                 n_chans=hidden_size,
                 n_filts=5,
@@ -78,29 +64,25 @@ class Predictor(nn.Module):
 
     def forward(
         self,
-        discrete_f0_list: List[Tensor],  # [(L, )]
-        phoneme_list: List[Tensor],  # [(L, )]
-        speaker_id: Tensor,  # (B, )
+        wave_list: List[Tensor],  # [(L, 1)]
+        lf0_list: List[Tensor],  # [(L, 1)]
+        t: Tensor,  # (B, )
     ):
         """
         B: batch size
         L: length
         """
-        length_list = [t.shape[0] for t in discrete_f0_list]
+        length_list = [t.shape[0] for t in wave_list]
 
-        length = torch.tensor(length_list, device=discrete_f0_list[0].device)
-        h = pad_sequence(discrete_f0_list, batch_first=True)  # (B, L, ?)
+        length = torch.tensor(length_list, device=wave_list[0].device)
+        h = pad_sequence(wave_list, batch_first=True)  # (B, L, ?)
 
-        phoneme = pad_sequence(phoneme_list, batch_first=True)  # (B, L)
-        phoneme = self.phoneme_embedder(phoneme)  # (B, L, ?)
+        lf0 = pad_sequence(lf0_list, batch_first=True)  # (B, L, ?)
 
-        speaker_id = self.speaker_embedder(speaker_id)
-        speaker_id = speaker_id.unsqueeze(dim=1)  # (B, 1, ?)
-        speaker_feature = speaker_id.expand(
-            speaker_id.shape[0], h.shape[1], speaker_id.shape[2]
-        )  # (B, L, ?)
+        t = t.unsqueeze(dim=1).unsqueeze(dim=2)  # (B, 1, ?)
+        t_feature = t.expand(t.shape[0], h.shape[1], t.shape[2])  # (B, L, ?)
 
-        h = torch.cat((h, phoneme, speaker_feature), dim=2)  # (B, L, ?)
+        h = torch.cat((h, lf0, t_feature), dim=2)  # (B, L, ?)
         h = self.pre(h)
 
         mask = self._mask(length)
@@ -112,31 +94,24 @@ class Predictor(nn.Module):
         else:
             output2 = output1
 
-        return (
-            [output1[i, :l] for i, l in enumerate(length_list)],
-            [output2[i, :l] for i, l in enumerate(length_list)],
-        )
+        return [output2[i, :l] for i, l in enumerate(length_list)]
 
     def inference(
         self,
-        discrete_f0_list: List[Tensor],  # [(L, )]
-        phoneme_list: List[Tensor],  # [(L, )]
-        speaker_id: Tensor,  # (B, )
+        wave_list: List[Tensor],  # [(L, 1)]
+        lf0_list: List[Tensor],  # [(L, 1)]
+        t: Tensor,  # (B, 1)
     ):
-        _, h = self(
-            discrete_f0_list=discrete_f0_list,
-            phoneme_list=phoneme_list,
-            speaker_id=speaker_id,
+        h = self(
+            wave_list=wave_list,
+            lf0_list=lf0_list,
+            t=t,
         )
         return h
 
 
 def create_predictor(config: NetworkConfig):
     return Predictor(
-        speaker_size=config.speaker_size,
-        speaker_embedding_size=config.speaker_embedding_size,
-        phoneme_size=config.phoneme_size,
-        phoneme_embedding_size=config.phoneme_embedding_size,
         hidden_size=config.hidden_size,
         block_num=config.block_num,
         post_layer_num=config.post_layer_num,

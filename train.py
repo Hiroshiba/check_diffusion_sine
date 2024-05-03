@@ -4,7 +4,6 @@ from typing import List
 
 import torch
 import yaml
-from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 
 from check_diffusion_sine.config import Config
@@ -22,6 +21,9 @@ from check_diffusion_sine.utility.pytorch_utility import (
     to_device,
 )
 from check_diffusion_sine.utility.train_utility import Logger, SaveManager
+
+from torch.cuda.amp.grad_scaler import GradScaler
+from torch.cuda.amp.autocast_mode import autocast
 
 
 def train(config_yaml_path: Path, output_dir: Path):
@@ -42,7 +44,6 @@ def train(config_yaml_path: Path, output_dir: Path):
         state_dict = torch.load(
             config.train.pretrained_predictor_path, map_location=device
         )
-        state_dict["speaker_embedder.weight"] = predictor.speaker_embedder.weight
         predictor.load_state_dict(state_dict)
     model.to(device)
     model.train()
@@ -51,15 +52,12 @@ def train(config_yaml_path: Path, output_dir: Path):
     generator = Generator(
         config=config, predictor=predictor, use_gpu=config.train.use_gpu
     )
-    evaluator = Evaluator(generator=generator)
+    evaluator = Evaluator(generator=generator, step_num=config.train.diffusion_step_num)
 
     # dataset
     datasets = create_dataset(config.dataset)
 
     def _create_loader(dataset, for_train: bool, for_eval: bool):
-        if dataset is None:
-            return None
-
         batch_size = (
             config.train.eval_batch_size if for_eval else config.train.batch_size
         )
@@ -154,7 +152,8 @@ def train(config_yaml_path: Path, output_dir: Path):
             scaler.step(optimizer)
             scaler.update()
 
-            scheduler.step()
+            if scheduler is not None:
+                scheduler.step()
 
             train_results.append(detach_cpu(result))
 

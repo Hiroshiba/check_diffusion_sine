@@ -5,17 +5,11 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 from typing_extensions import Literal, TypedDict
 
-from check_diffusion_sine.dataset import OutputData
+from check_diffusion_sine.dataset import DatasetOutput
 from check_diffusion_sine.generator import Generator, GeneratorOutput
-from check_diffusion_sine.model import calc
 
 
 class EvaluatorOutput(TypedDict):
-    diff_f0: Tensor
-    precision_voiced: Tensor
-    recall_voiced: Tensor
-    precision_unvoiced: Tensor
-    recall_unvoiced: Tensor
     value: Tensor
     data_num: int
 
@@ -23,43 +17,27 @@ class EvaluatorOutput(TypedDict):
 class Evaluator(nn.Module):
     judge: Literal["min", "max"] = "min"
 
-    def __init__(self, generator: Generator):
+    def __init__(self, generator: Generator, step_num: int):
         super().__init__()
         self.generator = generator
+        self.step_num = step_num
 
-    def forward(self, data: OutputData) -> EvaluatorOutput:
-        device = data["continuous_f0"][0].device
-
+    def forward(self, data: DatasetOutput) -> EvaluatorOutput:
         output_list: List[GeneratorOutput] = self.generator(
-            discrete_f0_list=data["discrete_f0"],
-            phoneme_list=data["phoneme"],
-            speaker_id=torch.stack(data["speaker_id"]),
+            noise_weve_list=data["noise_wave"],
+            lf0_list=data["lf0"],
+            step_num=self.step_num,
         )
 
-        target_f0 = torch.cat(data["continuous_f0"]).squeeze(1)
-        target_voiced = torch.cat(data["voiced"]).squeeze(1)
+        target_wave = torch.cat(data["target_wave"]).squeeze(1)
 
-        output_f0 = torch.cat([output["f0"] for output in output_list]).to(device)
-        output_voiced = torch.cat([output["voiced"] for output in output_list]).to(
-            device
-        )
+        output_wave = torch.cat([output["wave"] for output in output_list])
 
-        mask = target_voiced
-        diff_f0 = F.l1_loss(output_f0[mask], target_f0[mask])
+        diff_wave = F.mse_loss(output_wave, target_wave)
 
-        _, precision_voiced, recall_voiced = calc(output_voiced, target_voiced)
-        _, precision_unvoiced, recall_unvoiced = calc(
-            output_voiced * -1, target_voiced != True
-        )
-
-        value = diff_f0
+        value = diff_wave
 
         return EvaluatorOutput(
-            diff_f0=diff_f0,
-            precision_voiced=precision_voiced,
-            recall_voiced=recall_voiced,
-            precision_unvoiced=precision_unvoiced,
-            recall_unvoiced=recall_unvoiced,
             value=value,
             data_num=len(data),
         )
