@@ -64,13 +64,21 @@ class Generator(nn.Module):
                 wave_list_step.append([t.clone() for t in wave_list])
 
             for i in range(step_num):
-                output_list = self.predictor.inference(
+                k1_list = self.predictor.inference(
                     wave_list=wave_list,
                     lf0_list=lf0_list,
                     t=t[i].expand(len(lf0_list)),
                 )
-                for wave, output in zip(wave_list, output_list):
-                    wave += output.unsqueeze(1) / step_num
+                k2_list = self.predictor.inference(
+                    wave_list=[
+                        (w + k1.unsqueeze(1) / (2 * step_num))
+                        for w, k1 in zip(wave_list, k1_list)
+                    ],
+                    lf0_list=lf0_list,
+                    t=(t[i] + 1 / (2 * step_num)).expand(len(lf0_list)),
+                )
+                for wave, k1, k2 in zip(wave_list, k1_list, k2_list):
+                    wave += (k1 + k2).unsqueeze(1) / (2 * step_num)
 
                 if return_every_step:
                     wave_list_step.append([t.clone() for t in wave_list])
