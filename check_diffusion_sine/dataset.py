@@ -20,13 +20,19 @@ class DatasetInput:
 
 @dataclass
 class LazyDatasetInput:
-    lf0: float
-    sampling_length: int
+    lf0_low: float
+    lf0_high: float
+    min_sampling_length: int
+    max_sampling_length: int
 
     def generate(self):
         return DatasetInput(
-            lf0=self.lf0,
-            sampling_length=self.sampling_length,
+            lf0=numpy.random.uniform(self.lf0_low, self.lf0_high),
+            sampling_length=(
+                numpy.random.randint(self.min_sampling_length, self.max_sampling_length)
+                if self.min_sampling_length != self.max_sampling_length
+                else self.max_sampling_length
+            ),
         )
 
 
@@ -61,6 +67,7 @@ def preprocess(d: DatasetInput, sampling_rate: float, with_diffusion: bool):
         length=d.sampling_length,
         sampling_rate=sampling_rate,
     ).reshape(-1, 1)
+    target_wave *= numpy.sqrt(2)  # 分散を1にする
 
     if with_diffusion:
         t = sigmoid(numpy.random.randn())
@@ -104,21 +111,14 @@ class FeatureTargetDataset(Dataset):
 
 
 def get_datas(config: DatasetConfig, num: int):
-    lf0_low = config.lf0_low
-    lf0_high = config.lf0_high
-    min_sampling_length = config.min_sampling_length
-    max_sampling_length = config.max_sampling_length
-
     datas = [
         LazyDatasetInput(
-            lf0=(lf0_high - lf0_low) / num * i + lf0_low,
-            sampling_length=(
-                numpy.random.randint(min_sampling_length, max_sampling_length)
-                if min_sampling_length != max_sampling_length
-                else max_sampling_length
-            ),
+            lf0_low=config.lf0_low,
+            lf0_high=config.lf0_high,
+            min_sampling_length=config.min_sampling_length,
+            max_sampling_length=config.max_sampling_length,
         )
-        for i in range(num)
+        for _ in range(num)
     ]
     return datas
 
