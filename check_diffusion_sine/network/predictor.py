@@ -72,7 +72,7 @@ class Predictor(nn.Module):
         B: batch size
         L: length
         """
-        length_list = [t.shape[0] for t in wave_list]
+        length_list = [w.shape[0] for w in wave_list]
 
         length = torch.tensor(length_list, device=wave_list[0].device)
         h = pad_sequence(wave_list, batch_first=True)  # (B, L, ?)
@@ -94,13 +94,13 @@ class Predictor(nn.Module):
         else:
             output2 = output1
 
-        return [output2[i, :l] for i, l in enumerate(length_list)]
+        return [output2[i, :l, 0] for i, l in enumerate(length_list)]
 
     def inference(
         self,
         wave_list: List[Tensor],  # [(L, 1)]
         lf0_list: List[Tensor],  # [(L, 1)]
-        t: Tensor,  # (B, 1)
+        t: Tensor,  # (B, )
     ):
         h = self(
             wave_list=wave_list,

@@ -24,7 +24,7 @@ class Evaluator(nn.Module):
 
     def forward(self, data: DatasetOutput) -> EvaluatorOutput:
         output_list: List[GeneratorOutput] = self.generator(
-            noise_weve_list=data["noise_wave"],
+            noise_wave_list=data["noise_wave"],
             lf0_list=data["lf0"],
             step_num=self.step_num,
         )

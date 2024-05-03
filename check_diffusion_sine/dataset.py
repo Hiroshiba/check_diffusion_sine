@@ -12,10 +12,6 @@ from typing_extensions import TypedDict
 from check_diffusion_sine.config import DatasetConfig
 
 
-def sigmoid(a: Union[float, numpy.ndarray]):
-    return 1 / (1 + numpy.exp(-a))
-
-
 @dataclass
 class DatasetInput:
     lf0: float
@@ -52,6 +48,10 @@ def generate_sin_wave(
     return numpy.sin(
         2 * numpy.pi * f0 * numpy.arange(length) / sampling_rate + 2 * numpy.pi * phase
     )
+
+
+def sigmoid(a: Union[float, numpy.ndarray]):
+    return 1 / (1 + numpy.exp(-a))
 
 
 def preprocess(d: DatasetInput, sampling_rate: float, with_diffusion: bool):

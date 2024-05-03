@@ -43,18 +43,26 @@ class Generator(nn.Module):
 
     def forward(
         self,
-        noise_weve_list: List[Union[numpy.ndarray, Tensor]],
+        noise_wave_list: List[Union[numpy.ndarray, Tensor]],
         lf0_list: List[Union[numpy.ndarray, Tensor]],
         step_num: int,
+        return_every_step: bool = False,
     ):
-        noise_weve_list = [
-            to_tensor(noise_weve).to(self.device) for noise_weve in noise_weve_list
+        noise_wave_list = [
+            to_tensor(noise_weve).to(self.device) for noise_weve in noise_wave_list
         ]
         lf0_list = [to_tensor(lf0).to(self.device) for lf0 in lf0_list]
 
+        t = torch.linspace(0, 1, steps=step_num, device=self.device)
+
+        wave_list_step = []
+
         with torch.inference_mode():
-            t = torch.linspace(0, 1, steps=step_num, device=self.device)
-            wave_list = [t.clone() for t in noise_weve_list]
+            wave_list = [t.clone() for t in noise_wave_list]
+
+            if return_every_step:
+                wave_list_step.append([t.clone() for t in wave_list])
+
             for i in range(step_num):
                 output_list = self.predictor.inference(
                     wave_list=wave_list,
@@ -62,6 +70,15 @@ class Generator(nn.Module):
                     t=t[i].expand(len(lf0_list)),
                 )
                 for wave, output in zip(wave_list, output_list):
-                    wave += output / step_num
+                    wave += output.unsqueeze(1) / step_num
 
-        return [GeneratorOutput(wave=output) for output in output_list]
+                if return_every_step:
+                    wave_list_step.append([t.clone() for t in wave_list])
+
+        if not return_every_step:
+            return [GeneratorOutput(wave=wave.squeeze(1)) for wave in wave_list]
+        else:
+            return [
+                [GeneratorOutput(wave=wave.squeeze(1)) for wave in wave_list]
+                for wave_list in wave_list_step
+            ]
