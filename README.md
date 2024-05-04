@@ -5,12 +5,10 @@ flow matching を使ってサイン波生成してみるサンプル。
 
 ## 準備
 
-実装時は pytorch は 2.0 系を使った。ライブラリの依存関係が壊れており、 numpy や librosa を後から別バージョンにしないとたぶん動かない。
+実装時は pytorch は 2.0.1 を使った。
 
 ```py
 pip install -r requirements.txt
-pip install "numpy<1.20"
-pip install "librosa==0.10.2"
 ```
 
 ## 学習

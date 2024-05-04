@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:1.12.1-cuda11.3-cudnn8-runtime
+FROM pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime
 SHELL ["/bin/bash", "-c"]
 
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
