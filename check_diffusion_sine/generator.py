@@ -60,8 +60,8 @@ class Generator(nn.Module):
         with torch.inference_mode():
             wave_list = [t.clone() for t in noise_wave_list]
 
-            if return_every_step:
-                wave_list_step.append([t.clone() for t in wave_list])
+            # if return_every_step:
+            #     wave_list_step.append([t.clone() for t in wave_list])
 
             for i in range(step_num):
                 output_list = self.predictor.inference(
@@ -69,11 +69,17 @@ class Generator(nn.Module):
                     lf0_list=lf0_list,
                     t=t[i].expand(len(lf0_list)),
                 )
-                for wave, output in zip(wave_list, output_list):
-                    wave += output.unsqueeze(1) / step_num
 
                 if return_every_step:
-                    wave_list_step.append([t.clone() for t in wave_list])
+                    wave_list_step.append(
+                        [
+                            (wave + output.unsqueeze(1) * (step_num - i) / step_num)
+                            for wave, output in zip(wave_list, output_list)
+                        ]
+                    )
+
+                for wave, output in zip(wave_list, output_list):
+                    wave += output.unsqueeze(1) / step_num
 
         if not return_every_step:
             return [GeneratorOutput(wave=wave.squeeze(1)) for wave in wave_list]
